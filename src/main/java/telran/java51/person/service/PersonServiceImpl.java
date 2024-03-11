@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import telran.java51.person.dao.PersonRepository;
 import telran.java51.person.dto.AddressDto;
-import telran.java51.person.dto.ChilDto;
+import telran.java51.person.dto.ChildDto;
 import telran.java51.person.dto.CityPopulationDto;
 import telran.java51.person.dto.EmployeeDto;
 import telran.java51.person.dto.PersonDto;
@@ -28,6 +28,7 @@ public class PersonServiceImpl implements PersonService, CommandLineRunner {
 
 	final PersonRepository personRepository;
 	final ModelMapper modelMapper;
+	final PersonModelDtoMapper mapper;
 
 	@Transactional
 	@Override
@@ -35,21 +36,14 @@ public class PersonServiceImpl implements PersonService, CommandLineRunner {
 		if (personRepository.existsById(personDto.getId())) {
 			return false;
 		}
-		
-		personRepository.save(modelMapper.map(personDto, Person.class));
+		personRepository.save(mapper.mapToModel(personDto));
 		return true;
 	}
 
 	@Override
 	public PersonDto findPersonById(Integer id) {
-		Person person = personRepository.findById(id).orElseThrow(PersonNotFoundException::new);
-		if (person instanceof Child child) {
-			return modelMapper.map(child, ChilDto.class);
-		}
-		if (person instanceof Employee employee) {
-			return modelMapper.map(employee, EmployeeDto.class);
-		}
-		return modelMapper.map(person, PersonDto.class);
+		Person person = personRepository.findById(id).orElseThrow(PersonNotFoundException::new);	
+		return mapper.mapToDto(person);
 	}
 	
 	@Transactional
@@ -57,7 +51,7 @@ public class PersonServiceImpl implements PersonService, CommandLineRunner {
 	public PersonDto removePerson(Integer id) {
 		Person person = personRepository.findById(id).orElseThrow(() -> new PersonNotFoundException());
 		personRepository.delete(person);
-		return modelMapper.map(person, PersonDto.class);
+		return mapper.mapToDto(person);
 	}
 
 	@Transactional
@@ -65,7 +59,7 @@ public class PersonServiceImpl implements PersonService, CommandLineRunner {
 	public PersonDto updatePersonName(Integer id, String name) {
 		Person person = personRepository.findById(id).orElseThrow(() -> new PersonNotFoundException());
 		person.setName(name);
-		return modelMapper.map(person, PersonDto.class);
+		return mapper.mapToDto(person);
 	}
 
 	@Transactional
@@ -73,14 +67,14 @@ public class PersonServiceImpl implements PersonService, CommandLineRunner {
 	public PersonDto updatePersonAddress(Integer id, AddressDto addressDto) {
 		Person person = personRepository.findById(id).orElseThrow(() -> new PersonNotFoundException());
 		person.setAddress(modelMapper.map(addressDto, Address.class));
-		return modelMapper.map(person, PersonDto.class);
+		return mapper.mapToDto(person);
 	}
 
 	@Transactional(readOnly = true)
 	@Override
 	public Iterable<PersonDto> findPersonsByCity(String city) {
 		return personRepository.findByAddressCityIgnoreCase(city)
-				.map(p -> modelMapper.map(p, PersonDto.class))
+				.map(mapper::mapToDto)
 				.collect(Collectors.toList());
 	}
 
@@ -88,7 +82,7 @@ public class PersonServiceImpl implements PersonService, CommandLineRunner {
 	@Override
 	public Iterable<PersonDto> findPersonsByName(String name) {
 		return personRepository.findByNameIgnoreCase(name)
-				.map(p -> modelMapper.map(p, PersonDto.class))
+				.map(mapper::mapToDto)
 				.collect(Collectors.toList());
 	}
 
@@ -98,7 +92,7 @@ public class PersonServiceImpl implements PersonService, CommandLineRunner {
 		LocalDate from = LocalDate.now().minusYears(maxAge);
 		LocalDate to = LocalDate.now().minusYears(minAge);
 		return personRepository.findByBirthDateBetween(from, to)
-				.map(p -> modelMapper.map(p, PersonDto.class))
+				.map(mapper::mapToDto)
 				.collect(Collectors.toList());
 	}
 
@@ -107,36 +101,38 @@ public class PersonServiceImpl implements PersonService, CommandLineRunner {
 		return personRepository.getCitiesPopulation();
 	}
 	
-
 	@Override
-	public Iterable<ChilDto> getAllChild() {
-		return personRepository.getAllChild();
-	}
-	
-
-	@Override
-	public Iterable<ChilDto> getAllEmployeesBySalary(Integer minAge, Integer maxAge) {
-		return personRepository.getAllEmployeesBySalary(minAge, maxAge);
+	@Transactional(readOnly = true)
+	public Iterable<PersonDto> findEmployeeBySalary(int min, int max) {
+		return personRepository.findBySalaryBetween(min, max)
+				.map(p -> modelMapper.map(p, EmployeeDto.class))
+				.collect(Collectors.toList());
 	}
 
+	@Override
+	@Transactional(readOnly = true)
+	public Iterable<PersonDto> getChildren() {
+		return personRepository.findChildrenBy()
+				.map(c -> modelMapper.map(c, ChildDto.class))
+				.collect(Collectors.toList());
+	}
 
 	@Transactional
 	@Override
 	public void run(String... args) throws Exception {
-		if (personRepository.count() == 0) {
-			Person person = new Person(1000, "John", LocalDate.of(1985, 3, 11), 
+		if(personRepository.count() == 0) {
+			Person person = new Person(1000, "John", LocalDate.of(1985, 3, 11),
 					new Address("Tel Aviv", "Ben Gvirol", 81));
-			Child child = new Child(2000, "Moshe", LocalDate.of(2018, 7, 5), 
-					new Address("Ashkelon", "Bar Kohba", 21), "Shalom");
-			Employee employee = new Employee(3000, "Sarah", LocalDate.of(1955, 11, 23), 
-					new Address("Rehovot", "Herzl", 7), "Motorolf", 20_000);
+			Child child = new Child(2000, "Mosche", LocalDate.of(2018, 7, 5),
+					new Address("Ashkelon", "Bar Kohva", 21), "Shalom");
+			Employee employee = new Employee(3000, "Sarah", LocalDate.of(1995, 11, 23),
+					new Address("Rehovot", "Herzl", 7), "Motorola", 20_000);
 			personRepository.save(person);
 			personRepository.save(child);
 			personRepository.save(employee);
 		}
 		
 	}
-
 
 }
 
